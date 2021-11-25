@@ -339,6 +339,9 @@ def googledrive_service
 end
 
 def upload_googledrive(file)
+  File.open("/tmp/error","a"){ |f|
+    f.puts "upload_googledrive(#{file})"
+  }
   log "upload_googledrive #{file}"
   drive_service = googledrive_service
   log "drive_service = #{drive_service}"
@@ -354,11 +357,19 @@ def upload_googledrive(file)
     res = drive_service.create_file(file_metadata, fields: 'id')
     response = drive_service.list_files(q: "name = 'Space' and mimeType = 'application/vnd.google-apps.folder'", fields: "files(id, name)")
   end
+
+  File.open("/tmp/error","a"){ |f|
+    f.puts file
+  }
   
   #
   # Spaceフォルダにファイルを作成
   #
+  
   mimetype = MIME::Types.type_for(file)[0].to_s
+  
+  file = file.force_encoding("UTF-8") # こうしないとGoogleDriveにアップロードできない
+  
   filename = File.basename(file)
   
   folder_id = response.files[0].id
@@ -366,7 +377,24 @@ def upload_googledrive(file)
     name: filename,
     parents: [folder_id]
   }
+  File.open("/tmp/error","a"){ |f|
+    f.puts "try copy"
+  }
+  if false
+    system "/bin/cp '#{file}' /tmp/xxxx"
+    begin
+      res = drive_service.create_file(file_object, {upload_source:"/tmp/xxxx", content_type: mimetype})
+    rescue => e
+      File.open("/tmp/error","a"){ |f|
+        f.puts e
+      }
+    end
+  end
   res = drive_service.create_file(file_object, {upload_source:file, content_type: mimetype})
+
+  File.open("/tmp/error","a"){ |f|
+    f.puts "copy success"
+  }
   dialog("GoogleDriveのSpaceフォルダに#{file}が保存されました。","OK",2)
   "https://drive.google.com/open?id=#{res.id}"
 end
@@ -536,6 +564,10 @@ def run
         }
       end
 
+      File.open("/tmp/space","w"){ |f|
+        f.puts attr
+      }
+
       s3bucket = nil
       space_cfg = File.expand_path("~/.space")
       if File.exist?(space_cfg)
@@ -548,8 +580,14 @@ def run
         end
       end
       if s3bucket
+        File.open("/tmp/error","a"){ |f|
+          f.puts file
+        }
         attr['uploadurl'] = upload_s3(file,s3bucket)
       else
+        File.open("/tmp/error","a"){ |f|
+          f.puts "xxxxx #{file}"
+        }
         attr['uploadurl'] = upload_googledrive(file)
       end
 
@@ -608,23 +646,5 @@ EOF
     system "/usr/bin/open 'https://Scrapbox.io/#{project}/#{datestr}?body=#{URI.encode_www_form_component(str)}'"
   end
 end
-
-#    if false
-#      check_gyazo_token
-#      
-#      filename = ''
-#      gyazo_url = ''
-#      cloud_url = ''
-#      ARGV.each { |file|
-#        gyazo_url = upload_gyazo(file,"DESC") # DESCとは?
-#        googledrive_url = upload_googledrive(file)
-#        
-#        log "gyazo #{file} => #{gyazo_url}"
-#        log "upload #{file} => #{googledrive_url}"
-#      }
-#    end
-#
-#  end
-#end
 
 run
