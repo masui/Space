@@ -4,8 +4,9 @@
 #
 #  * あらゆる情報を放り込む
 #
-# Gyazoの認証手順
-# https://gyazo.com/api/docs/auth
+#  * Gyazoの認証手順
+#    https://gyazo.com/api/docs/auth
+#  * GoogleDriveの認証手順
 #
 
 # ローカルのgemを利用する方法
@@ -55,8 +56,8 @@ require 'exifr/jpeg'
 require 'mime/types'
 
 #
-# AppleScriptでダイアログ表示
-# dialog("メッセージ","OK",3)
+# ダイアログ表示 dialog("メッセージ","OK",3)
+# AppleScriptを利用
 #
 def dialog(message, button, timeout=3)
   if button.class == Array
@@ -84,12 +85,49 @@ def app_dir
   File.dirname(__FILE__)
 end
 
-#
-# Gyazoの認証
-#
+# qlmanageでサムネイルを作る
+def thumb(file,thumbnail)
+  return unless File.exist?(file)
+  
+  tmpdir = "/tmp/space_thumb"
+  Dir.mkdir(tmpdir) unless File.exist?(tmpdir)
+
+  qlcmd = "/usr/bin/qlmanage -t '#{file}' -s 1024 -x -o #{tmpdir}"
+  pngpath = "#{tmpdir}/#{File.basename(file)}.png"
+
+  log qlcmd
+  system qlcmd
+
+  if File.exist?(pngpath)
+    log "qlmanageでサムネ作成成功"
+  else
+    log "qlmanageでサムネ作成失敗"
+    tmphtml = "#{tmpdir}/thumb.html"
+    File.open(tmphtml,"w"){ |f|
+      f.puts thumb_html(file)
+    }
+    qlcmd = "/usr/bin/qlmanage -t #{tmphtml} -s 512 -x -o #{tmpdir}"
+    pngpath = "#{tmpdir}/thumb.html.png"
+
+    log qlcmd
+    system qlcmd
+  end
+
+  if File.exist?(pngpath)
+    system "/bin/cp '#{pngpath}' #{thumbnail}"
+    Dir.new(tmpdir).each { |file|
+      File.delete("#{tmpdir}/#{file}") if file !~ /^\./
+    }
+  else
+    log "#{pngpath}作成失敗"
+    exit
+  end
+end
 
 #
-# Gyazoの秘密トークン
+# Gyazoの認証とアップロード
+#
+# Gyazoの秘密トークン処理
 #
 def gyazo_token_path
   "#{app_dir}/gyazo_token"
@@ -113,7 +151,6 @@ end
 #
 # Gyazoのアクセストークン取得
 #
-
 def check_gyazo_token
   gyazo_client_id = "USECCHCZuVIN3DykF7Ixvy_wR93NqoUWlcMkQK2EoYM"     # Space.app用のID
   gyazo_client_secret = "7qcQynnsvWh_AZ78Lp-ZCvPkADG48ZH6jHsKcBpM0t0"
@@ -130,7 +167,7 @@ def check_gyazo_token
     session = server.accept
     request = session.gets
     method, full_path = request.split(' ')
-    session.puts "Auth success"
+    session.puts "Gyazo auth success"
     session.close
     server.close
     
@@ -166,53 +203,14 @@ def check_gyazo_token
     end
     puts "response.body = #{response.body}"
     set_gyazo_token JSON.parse(response.body)['access_token'] # responseはJSONで返る
-    dialog("Gyazoアクセストークンが生成されました。","OK",3)
-  end
-end
-
-def thumb(file,thumbnail)
-  return unless File.exist?(file)
-  
-  tmpdir = "/tmp/universe_thumb"
-  Dir.mkdir(tmpdir) unless File.exist?(tmpdir)
-
-  qlcmd = "/usr/bin/qlmanage -t '#{file}' -s 1024 -x -o #{tmpdir}"
-  pngpath = "#{tmpdir}/#{File.basename(file)}.png"
-
-  log qlcmd
-  system qlcmd
-
-  if File.exist?(pngpath)
-    log "qlmanageでサムネ作成成功"
-  else
-    log "qlmanageでサムネ作成失敗"
-    tmphtml = "#{tmpdir}/thumb.html"
-    File.open(tmphtml,"w"){ |f|
-      f.puts thumb_html(file)
-    }
-    qlcmd = "/usr/bin/qlmanage -t #{tmphtml} -s 512 -x -o #{tmpdir}"
-    pngpath = "#{tmpdir}/thumb.html.png"
-
-    log qlcmd
-    system qlcmd
-  end
-
-  if File.exist?(pngpath)
-    system "/bin/cp '#{pngpath}' #{thumbnail}"
-    Dir.new(tmpdir).each { |file|
-      File.delete("#{tmpdir}/#{file}") if file !~ /^\./
-    }
-  else
-    log "#{pngpath}作成失敗"
-    exit
+    dialog("Gyazoアクセストークンが生成されました。","OK",2)
+    log "gyazo_token = #{gyazo_token}"
   end
 end
 
 def upload_gyazo(file, desc)
   log "upload_gyazo(#{file})"
   gyazo = Gyazo::Client.new access_token:gyazo_token
-
-  log "gyazo_token = #{gyazo_token}"
 
   t = File.mtime(file)
   if file =~ /\.(jpg|jpeg)$/i  # JPEG
@@ -235,8 +233,137 @@ def upload_gyazo(file, desc)
   sleep 1
   url = res[:permalink_url]
   log "gyazo_url = #{url}"
-  log "gyazo_desc = #{desc}"
   return url
+end
+
+#
+# GoogleDriveの認証とアップロード
+#
+require 'google/apis/drive_v3'
+require 'google/api_client/client_secrets'
+
+#
+# Googleの秘密トークン
+#
+def google_refresh_token_path
+  "#{app_dir}/google_refresh_token"
+end
+
+def set_google_refresh_token(token)
+  if File.exist?(app_dir)
+    File.open(google_refresh_token_path,"w"){ |f|
+      f.puts token
+    }
+  end
+end
+  
+def google_refresh_token
+  if File.exist?(google_refresh_token_path)
+    return File.read(google_refresh_token_path).chomp
+  end
+  return nil
+end
+
+def googledrive_service
+  # OAuthで使うclient_idとclient_secret
+  # client_secrets = Google::APIClient::ClientSecrets.load とすると client_secrets.json を読むのだが
+  # 別ファイルにするのも面倒なので直書きしている
+  # これらは'secret'と書いてあるが、アプリケーションを同定するためのものであり、ユーザの認証情報ではない
+  google_secret_data = {
+    installed: {
+      client_id: "245084284632-v88q7r65ddine8aa94qp7ribop4018eg.apps.googleusercontent.com",
+      client_secret: "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"
+    }
+  }
+  client_secrets = Google::APIClient::ClientSecrets.new google_secret_data
+  log "Google_client_secrets = #{client_secrets}"
+    
+  auth_client = client_secrets.to_authorization
+  log "auth_client = #{auth_client}"
+    
+  auth_client.update!(
+    :scope => 'https://www.googleapis.com/auth/drive', # 全部許可
+    :redirect_uri => "http://localhost/"               # localhostへのコールバック
+  )
+    
+  if google_refresh_token
+    # 既存のrefresh_tokenを使う
+    auth_client.refresh_token = google_refresh_token
+  else
+    dialog("GoogleDriveのアクセストークンを生成するため認証してください","OK",3)
+
+    auth_uri = auth_client.authorization_uri.to_s
+    system "open '#{auth_uri}'"
+      
+    # 簡易(?)HTTPサーバをたてる
+    server = TCPServer.new 80
+    session = server.accept
+    request = session.gets
+    method, full_path = request.split(' ')
+    session.puts "GoogleDrive auth success"
+    session.close
+    server.close
+
+    full_path = URI.decode(full_path)
+    full_path.sub!(/\/\?/,'')
+    full_path.sub!(/\s+.*$/,'')
+    code = ''
+    full_path.split(/&/).each { |s|
+      a = s.split(/=/)
+      if a[0] == 'code'
+        code = a[1]
+      end
+    }
+    # 認証のためのcodeが取得される
+    log "google auth code = #{code}"
+      
+    auth_client.code = code
+    auth_client.fetch_access_token!
+    puts "auth_client.refresh_token = #{auth_client.refresh_token}"
+    
+    set_google_refresh_token(auth_client.refresh_token)# トークンをセーブ
+    log "Google refresh_token = #{google_refresh_token}"
+    dialog("GoogleDriveのアクセストークンが生成されました。","OK",2)
+    
+  end
+    
+  drive_service = Google::Apis::DriveV3::DriveService.new
+  drive_service.authorization = auth_client
+
+  return drive_service
+end
+
+def upload_googledrive(file)
+  log "upload_googledrive #{file}"
+  drive_service = googledrive_service
+  log "drive_service = #{drive_service}"
+
+  response = drive_service.list_files(q: "name = 'Space' and mimeType = 'application/vnd.google-apps.folder' and parents in 'root'", fields: "files(id, name, parents)")
+  
+  if response.files.empty? # Spaceフォルダが存在しない場合
+    # "Space" フォルダ生成
+    file_metadata = {
+      name: 'Space',
+      mime_type: 'application/vnd.google-apps.folder'
+    }
+    res = drive_service.create_file(file_metadata, fields: 'id')
+    response = drive_service.list_files(q: "name = 'Space' and mimeType = 'application/vnd.google-apps.folder'", fields: "files(id, name)")
+  end
+  
+  #
+  # Spaceフォルダにファイルを作成
+  #
+  mimetype = MIME::Types.type_for(file)[0].to_s
+  filename = File.basename(file)
+  
+  folder_id = response.files[0].id
+  file_object = {
+    name: filename,
+    parents: [folder_id]
+  }
+  res = drive_service.create_file(file_object, {upload_source:file, content_type: mimetype})
+  dialog("GoogleDriveのSpaceフォルダに#{file}が保存されました。","OK",2)
+  "https://drive.google.com/open?id=#{res.id}"
 end
 
 #
@@ -248,33 +375,27 @@ def run
 
   # require 'config' # upload_cloud() の定義(など)
 
-  check_gyazo_token
-
   if ARGV.length == 0
-    puts "tantai"
-    # 検索ページを開く
-    # universe_search
+    # ????.app のアプリ名を取得
+    path = $0
+    path =~ /\/([a-zA-Z\-\.]+)\.app\//
+    project = $1
+    system "open https://scrapbox.io/#{project}"
   else # Drag&Drop
-    puts "Drag&Drop--"
+    check_gyazo_token
+
     filename = ''
     gyazo_url = ''
     cloud_url = ''
     ARGV.each { |file|
-      puts "file = #{file}"
-      filename = file
-      puts filename
-      #(gyazo_url, cloud_url) = upload_file file # クラウドにアップロード
-      gyazo_url = upload_gyazo(filename,"DESC")
+      gyazo_url = upload_gyazo(file,"DESC") # DESCとは?
+      googledrive_url = upload_googledrive(file)
 
-      log "upload #{file} => #{gyazo_url}"
+      log "gyazo #{file} => #{gyazo_url}"
+      log "upload #{file} => #{googledrive_url}"
     }
 
-    # open_gyazo_or_scrapbox(gyazo_url,cloud_url,filename)
   end
-end
-
-def open_gyazo_or_scrapbox(gyazo_url,cloud_url,filename)
-  system "open #{gyazo_url}"
 end
 
 run
