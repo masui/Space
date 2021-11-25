@@ -444,6 +444,8 @@ def run
   end
 
   puts project
+  
+  datestr = Time.now.strftime('%Y%m%d%H%M%S')
     
   if ARGV.length == 0
     system "open https://scrapbox.io/#{project}"
@@ -508,7 +510,7 @@ def run
         #File.open("/tmp/log","a"){ |f|
         #  f.puts "upload #{pngpath} to Gyazo..."
         #}
-        gyazourl = upload_gyazo(pngpath, "DESC", attr['time'])
+        gyazourl = upload_gyazo(pngpath, "https://Scrapbox.io/#{project}/#{datestr} #{file}", attr['time'])
         # res = @gyazo.upload imagefile: pngpath, created_at: attr['time']
 
         system "/bin/rm '#{pngpath}'"
@@ -637,7 +639,6 @@ EOF
     }
 
     # Scrapboxページ開く
-    datestr = Time.now.strftime('%Y%m%d%H%M%S')
     system "/usr/bin/open 'https://Scrapbox.io/#{project}/#{datestr}?body=#{URI.encode_www_form_component(str)}'"
   end
 end
