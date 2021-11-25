@@ -372,6 +372,35 @@ def upload_googledrive(file)
 end
 
 #
+# S3へのアップロード (ほぼ増井専用)
+# ~/.space に書いておく
+#
+def upload_s3(file,bucket)
+  ext = ''
+  if file =~ /^(.*)(\.\w+)$/ then
+    ext = $2
+  end
+  hash = Digest::MD5.file(file).to_s
+
+  begin
+    # aws cp コマンドを使う
+    # 認証情報は ~/.aws/ にある
+    # ファイル名が日本語だとうまくいかないことがあるので別ファイルにコピーしてからアップロード
+    dstfile = "s3://#{bucket}/#{hash[0]}/#{hash[1]}/#{hash}#{ext}"
+    system "/bin/cp '#{file}' /tmp/__space_file"
+    system "/usr/local/bin/aws s3 cp --profile default /tmp/__space_file #{dstfile} --acl public-read "
+    system "/bin/rm /tmp/__space_file"
+    "https://s3-ap-northeast-1.amazonaws.com/#{bucket}/#{hash[0]}/#{hash[1]}/#{hash}#{ext}"
+  rescue => e
+    File.open("/tmp/error","a"){ |f|
+      f.puts e
+    }
+  end
+  "https://s3-ap-northeast-1.amazonaws.com/#{bucket}/#{hash[0]}/#{hash[1]}/#{hash}#{ext}"
+end
+
+
+#
 # Spaceのメインルーチン
 #
 def run
@@ -507,8 +536,22 @@ def run
         }
       end
 
-      # attr['uploadurl'] = upload_s3(file)
-      attr['uploadurl'] = upload_googledrive(file)
+      s3bucket = nil
+      space_cfg = File.expand_path("~/.space")
+      if File.exist?(space_cfg)
+        begin
+          data = JSON.parse(File.read(space_cfg))
+          if data['s3-bucket']
+            s3bucket = data['s3-bucket']
+          end
+        rescue
+        end
+      end
+      if s3bucket
+        attr['uploadurl'] = upload_s3(file,s3bucket)
+      else
+        attr['uploadurl'] = upload_googledrive(file)
+      end
 
       File.open("/tmp/error","a"){ |f|
         f.puts "s3 upload success"
