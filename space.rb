@@ -327,6 +327,12 @@ def googledrive_service
       
     auth_client.code = code
     auth_client.fetch_access_token!
+
+    if auth_client.refresh_token.to_s == ''
+      dialog("ブラウザでGoogleからログアウトしてDrag&Dropを再実行してください","OK",5)
+      exit
+    end
+    
     puts "auth_client.refresh_token = #{auth_client.refresh_token}"
     
     set_google_refresh_token(auth_client.refresh_token)# トークンをセーブ
