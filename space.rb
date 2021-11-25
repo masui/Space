@@ -45,10 +45,10 @@ require 'find'
 # require "bundler/setup" してGemfile.lockを読むというのが普通のようだが、bundlerが無いかもしれないので自力でやる
 # 本当はgemspecのrequire_paths を見る必要があるようだが, libとgeneratedしか無いので
 #
-#libdirs = `find #{appdir}/ruby | egrep '/(lib|generated)$'`
-#libdirs.split(/\n/).each { |dir|
-#  $: << dir
-#}
+libdirs = `find #{appdir}/ruby | egrep '/(lib|generated)$'`
+libdirs.split(/\n/).each { |dir|
+  $: << dir
+}
 
 # 追加ライブラリ
 require 'json'
@@ -637,8 +637,8 @@ tell application "Finder"
   move POSIX file "#{path}" to trash
 end tell
 EOF
-      # 消さなくてもいいかも
-      # system "/usr/bin/osascript -e '#{script}'"
+      # 消さなくてもいいかも?
+      system "/usr/bin/osascript -e '#{script}'"
     }
 
     # Scrapboxページ開く
