@@ -2,12 +2,7 @@
 
 <ul>
   <li>よくわからないファイルをGoogleDriveにアップロードしつつ、説明するScrapboxページを作る</li>
-  <li>ブックマークも同じプロジェクトで管理</li>
-  <li>Space.app を自分のプロジェクト名に変える</li>
-  <ul>
-    <li>masui-space.appという名前にすると<a href="https://scrapbox.io/masui-space/">https://scrapbox.io/masui-space/</a>が使われる
-  </ul>
-  <li>もとファイルはゴミ箱に移動したい</li>
+  <li>ブックマークなども同じプロジェクトで管理すると良い</li>
   <li>消したいけど本当に消しても大丈夫かな? と悩むようなファイルを視界から消すことができる</li>
 </ul>
 
@@ -15,9 +10,16 @@
 
 <ul>
   <li>Gyazoアカウントは作っておく</li>
-  <li>GoogleDriveのアカウントも作っておく</li>
-  <li>いろいろ最初に認証する</li>
-  <li>GoogleDriveの<code>Space</code>というフォルダにファイルがアップロードされる</li>
+  <li>Googleのアカウントも作っておく</li>
+  <li>Space.app を自分のプロジェクト名に変える</li>
+  <ul>
+    <li>masui-space.appという名前にすると<a href="https://scrapbox.io/masui-space/">https://scrapbox.io/masui-space/</a>が使われる
+  </ul>
+  <li>アプリにファイルをDrag&amp;DropするとファイルがアップロードされてScrapboxページが作られる</li>
+  <ul>
+    <li>GoogleDriveの<code>Space</code>というフォルダにファイルがアップロードされる</li>
+    <li>いろいろ最初に認証する</li>
+  </ul>
   <li></li>
   <li></li>
 </ul>
