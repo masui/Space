@@ -38,16 +38,17 @@ require 'net/http'
 require 'uri'
 require 'json'
 require 'socket'
+require 'find'
 
 #
 # gemのパスを全部 $: に加える
 # require "bundler/setup" してGemfile.lockを読むというのが普通のようだが、bundlerが無いかもしれないので自力でやる
 # 本当はgemspecのrequire_paths を見る必要があるようだが, libとgeneratedしか無いので
 #
-libdirs = `find #{appdir}/ruby | egrep '/(lib|generated)$'`
-libdirs.split(/\n/).each { |dir|
-  $: << dir
-}
+#libdirs = `find #{appdir}/ruby | egrep '/(lib|generated)$'`
+#libdirs.split(/\n/).each { |dir|
+#  $: << dir
+#}
 
 # 追加ライブラリ
 require 'json'
@@ -208,18 +209,22 @@ def check_gyazo_token
   end
 end
 
-def upload_gyazo(file, desc)
+def upload_gyazo(file, desc, t)
   log "upload_gyazo(#{file})"
+
+  check_gyazo_token
+
   gyazo = Gyazo::Client.new access_token:gyazo_token
 
-  t = File.mtime(file)
+  res = ''
+  # t = File.mtime(file)
   if file =~ /\.(jpg|jpeg)$/i  # JPEG
     log "upload #{file} to Gyazo..."
-    begin
-      exif = EXIFR::JPEG.new(file)
-      t = exif.date_time if exif.date_time.to_s != ''
-    rescue
-    end
+    #begin
+    #  exif = EXIFR::JPEG.new(file)
+    #  t = exif.date_time if exif.date_time.to_s != ''
+    #rescue
+    #end
     res = gyazo.upload imagefile: file, created_at: t, desc: desc
   elsif file =~ /\.(gif|png)$/i # その他の画像
     log "upload #{file} to Gyazo..."
@@ -375,27 +380,208 @@ def run
 
   # require 'config' # upload_cloud() の定義(など)
 
-  if ARGV.length == 0
-    # ????.app のアプリ名を取得
-    path = $0
-    path =~ /\/([a-zA-Z\-\.]+)\.app\//
+  # ????.app のアプリ名を取得
+  project = "Space"
+  path = $0
+  if path =~ /\/([a-zA-Z\-\.]+)\.app\//
     project = $1
+  end
+
+  puts project
+    
+  if ARGV.length == 0
     system "open https://scrapbox.io/#{project}"
   else # Drag&Drop
-    check_gyazo_token
+    allfiles = [] # セーブするファイル全部
+    allitems = [] # 指定されたファイルとフォルダ
 
-    filename = ''
-    gyazo_url = ''
-    cloud_url = ''
-    ARGV.each { |file|
-      gyazo_url = upload_gyazo(file,"DESC") # DESCとは?
-      googledrive_url = upload_googledrive(file)
-
-      log "gyazo #{file} => #{gyazo_url}"
-      log "upload #{file} => #{googledrive_url}"
+    ARGV.each { |item|
+      if File.exist?(item)
+        allitems.push(item)
+        if File.directory?(item)
+          puts "file <#{item}> is directory"
+        end
+        Find.find(item) { |f|
+          if File.file?(f)
+            allfiles.push f
+          end
+        }
+      end
     }
 
+    attrs = []
+    allfiles.each { |file|
+      attr = {}
+      attr['filename'] = file
+      attr['fullname'] = File.expand_path(file)
+      attr['basename'] = File.basename(file)
+
+      # MD5値
+      attr['md5'] = Digest::MD5.file(file).to_s
+
+      # 時刻
+      #attr['time'] = modtime(file)
+      attr['time'] = File.mtime(file)
+      if file =~ /(\w+)\.(jpg|jpeg)/i
+        begin
+          exif = EXIFR::JPEG.new(file)
+          t = exif.date_time
+          if t
+            attr['time'] = t
+          end
+        rescue
+        end
+      end
+      attr['time14'] = attr['time'].strftime("%Y%m%d%H%M%S")
+
+      # サイズ
+      attr['size'] = File.size(file)
+
+      # Gyazoにアップロード
+      # qlmanageでサムネイル作成
+      qlcmd = "/usr/bin/qlmanage -t '#{attr['fullname']}' -s 1024 -x -o /tmp"
+      pngpath = "/tmp/#{attr['basename']}.png"
+
+      File.open("/tmp/log","w"){ |f|
+        f.puts qlcmd
+        f.puts pngpath
+      }
+      system qlcmd
+      if File.exist?(pngpath)
+        STDERR.puts "upload #{pngpath} to Gyazo..."
+        File.open("/tmp/log","a"){ |f|
+          f.puts "upload #{pngpath} to Gyazo..."
+        }
+        gyazourl = upload_gyazo(pngpath, "DESC", attr['time'])
+        # res = @gyazo.upload imagefile: pngpath, created_at: attr['time']
+
+        system "/bin/rm '#{pngpath}'"
+        # gyazourl = res[:permalink_url]
+        attr['gyazourl'] = gyazourl
+      end
+    
+      # GPS情報
+      if file =~ /\.(jpg|jpeg)$/i
+        begin
+          exif = EXIFR::JPEG.new(file)
+          d = exif.gps_longitude
+          if d
+            long = d[0] + d[1] / 60 + d[2] / 3600
+            d = exif.gps_latitude
+            lat = d[0] + d[1] / 60 + d[2] / 3600
+            mapline = "[#{exif.gps_latitude_ref}#{lat.to_f},#{exif.gps_longitude_ref}#{long.to_f},Z14]"
+            attr['mapline'] = mapline
+          end
+        rescue
+        end
+      end
+
+      # テキストデータ
+      File.open("/tmp/error","w"){ |f|
+        f.puts attr['fullname']
+        f.puts "/usr/bin/file '#{attr['fullname']}'"
+      }
+      begin
+        s = `LANG=ja_JP.UTF-8 /usr/bin/file '#{attr['fullname']}'`.force_encoding("UTF-8")
+        File.open("/tmp/error","a"){ |f|
+          f.puts s
+        }
+        
+        if `LANG=ja_JP.UTF-8 /usr/bin/file '#{attr['fullname']}'`.force_encoding("UTF-8") =~ /text/
+          File.open("/tmp/error","a"){ |f|
+            f.puts "This is a text file."
+          }
+          text = File.read(attr['fullname']).force_encoding("UTF-8")
+          texts = text.split(/\n/)[0,10]
+          if text.length > 900
+            texts = text.split(/\n/)[0,2]
+          end
+          File.open("/tmp/error","a"){ |f|
+            f.puts text
+          }
+          attr['text'] = texts
+        end
+      rescue => e
+        File.open("/tmp/error","a"){ |f|
+          f.puts e
+        }
+      end
+
+      # attr['uploadurl'] = upload_s3(file)
+      attr['uploadurl'] = upload_googledrive(file)
+
+      File.open("/tmp/error","a"){ |f|
+        f.puts "s3 upload success"
+        f.puts "file = #{attr['uploadurl']}"
+      }
+      
+      attrs.push(attr)
+    }
+    
+    # Scrapboxテキスト作成
+    begin    
+      str = ''.force_encoding("UTF-8")
+      attrs.each { |attr|
+        obj = {}
+        str += "[#{attr['fullname']} #{attr['uploadurl']}]\n".force_encoding("UTF-8")
+        if attr['text']
+          attr['text'].each { |line|
+            str += ">#{line}\n".force_encoding("UTF-8")
+          }
+        end
+        if attr['time14']
+          attr['time14'] =~ /^(........)(.*)$/
+          s = "[#{$1}]#{$2}"
+          str += "Date: #{s}\n".force_encoding("UTF-8")
+        end
+        str += "#{attr['mapline']}\n".force_encoding("UTF-8") if attr['mapline']
+        str += "File: [#{attr['basename']}]\n".force_encoding("UTF-8") # 同じファイル名のものをリンクするため
+        str += "Size: #{attr['size']}\n".force_encoding("UTF-8") if attr['size']
+        str += "[[#{attr['gyazourl']} #{attr['uploadurl']}]]\n".force_encoding("UTF-8") if attr['gyazourl']
+        str += "\n".force_encoding("UTF-8")
+      }
+    rescue => e
+      File.open("/tmp/error","a"){ |f|
+        f.puts e
+      }
+    end
+
+    # ゴミ箱へ
+    puts "allitems = #{@allitems}"
+    allitems.each { |item|
+      path = File.expand_path(item)
+      next unless File.exist?(path)
+      script = <<EOF
+tell application "Finder"
+  move POSIX file "#{path}" to trash
+end tell
+EOF
+      # 消さなくてもいいかも
+      # system "/usr/bin/osascript -e '#{script}'"
+    }
+
+    # Scrapboxページ開く
+    datestr = Time.now.strftime('%Y%m%d%H%M%S')
+    system "/usr/bin/open 'https://Scrapbox.io/#{project}/#{datestr}?body=#{URI.encode_www_form_component(str)}'"
   end
 end
+
+#    if false
+#      check_gyazo_token
+#      
+#      filename = ''
+#      gyazo_url = ''
+#      cloud_url = ''
+#      ARGV.each { |file|
+#        gyazo_url = upload_gyazo(file,"DESC") # DESCとは?
+#        googledrive_url = upload_googledrive(file)
+#        
+#        log "gyazo #{file} => #{gyazo_url}"
+#        log "upload #{file} => #{googledrive_url}"
+#      }
+#    end
+#
+#  end
+#end
 
 run
