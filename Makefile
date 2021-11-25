@@ -24,6 +24,9 @@ authclean:
 	-/bin/rm -f /Applications/$(PROJECT).app/Contents/Resources/gyazo_token
 	-/bin/rm -f /Applications/$(PROJECT).app/Contents/Resources/google_refresh_token
 
+#
+# rubyフォルダの下にローカルgemが入るハズ
+#
 bundle:
 	/usr/local/bin/bundle install --path .
 

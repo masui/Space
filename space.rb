@@ -116,11 +116,13 @@ def thumb(file,thumbnail)
 
   if File.exist?(pngpath)
     system "/bin/cp '#{pngpath}' #{thumbnail}"
-    Dir.new(tmpdir).each { |file|
-      File.delete("#{tmpdir}/#{file}") if file !~ /^\./
-    }
+    system "/bin/rm -r -f #{tmpdir}"
+    #Dir.new(tmpdir).each { |file|
+    #  File.delete("#{tmpdir}/#{file}") if file !~ /^\./
+    #}
   else
     log "#{pngpath}作成失敗"
+    system "/bin/rm -r -f #{tmpdir}"
     exit
   end
 end
@@ -234,6 +236,7 @@ def upload_gyazo(file, desc, t)
     thumb(file,thumbimage)
     log "upload #{file} to Gyazo... thumb = #{thumbimage}"
     res = gyazo.upload imagefile: thumbimage, created_at: t, desc: desc
+    system "/bin/rm -f #{thumbimage}"
   end
   sleep 1
   url = res[:permalink_url]
@@ -339,9 +342,9 @@ def googledrive_service
 end
 
 def upload_googledrive(file)
-  File.open("/tmp/error","a"){ |f|
-    f.puts "upload_googledrive(#{file})"
-  }
+  #File.open("/tmp/error","a"){ |f|
+  #  f.puts "upload_googledrive(#{file})"
+  #}
   log "upload_googledrive #{file}"
   drive_service = googledrive_service
   log "drive_service = #{drive_service}"
@@ -358,9 +361,9 @@ def upload_googledrive(file)
     response = drive_service.list_files(q: "name = 'Space' and mimeType = 'application/vnd.google-apps.folder'", fields: "files(id, name)")
   end
 
-  File.open("/tmp/error","a"){ |f|
-    f.puts file
-  }
+  #File.open("/tmp/error","a"){ |f|
+  #  f.puts file
+  #}
   
   #
   # Spaceフォルダにファイルを作成
@@ -377,24 +380,14 @@ def upload_googledrive(file)
     name: filename,
     parents: [folder_id]
   }
-  File.open("/tmp/error","a"){ |f|
-    f.puts "try copy"
-  }
-  if false
-    system "/bin/cp '#{file}' /tmp/xxxx"
-    begin
-      res = drive_service.create_file(file_object, {upload_source:"/tmp/xxxx", content_type: mimetype})
-    rescue => e
-      File.open("/tmp/error","a"){ |f|
-        f.puts e
-      }
-    end
-  end
+  #File.open("/tmp/error","a"){ |f|
+  #  f.puts "try copy"
+  #}
   res = drive_service.create_file(file_object, {upload_source:file, content_type: mimetype})
 
-  File.open("/tmp/error","a"){ |f|
-    f.puts "copy success"
-  }
+  #File.open("/tmp/error","a"){ |f|
+  #  f.puts "copy success"
+  #}
   dialog("GoogleDriveのSpaceフォルダに#{file}が保存されました。","OK",2)
   "https://drive.google.com/open?id=#{res.id}"
 end
@@ -420,9 +413,9 @@ def upload_s3(file,bucket)
     system "/bin/rm /tmp/__space_file"
     "https://s3-ap-northeast-1.amazonaws.com/#{bucket}/#{hash[0]}/#{hash[1]}/#{hash}#{ext}"
   rescue => e
-    File.open("/tmp/error","a"){ |f|
-      f.puts e
-    }
+    #File.open("/tmp/error","a"){ |f|
+    #  f.puts e
+    #}
   end
   "https://s3-ap-northeast-1.amazonaws.com/#{bucket}/#{hash[0]}/#{hash[1]}/#{hash}#{ext}"
 end
@@ -499,16 +492,16 @@ def run
       qlcmd = "/usr/bin/qlmanage -t '#{attr['fullname']}' -s 1024 -x -o /tmp"
       pngpath = "/tmp/#{attr['basename']}.png"
 
-      File.open("/tmp/log","w"){ |f|
-        f.puts qlcmd
-        f.puts pngpath
-      }
+      #File.open("/tmp/log","w"){ |f|
+      #  f.puts qlcmd
+      #  f.puts pngpath
+      #}
       system qlcmd
       if File.exist?(pngpath)
         STDERR.puts "upload #{pngpath} to Gyazo..."
-        File.open("/tmp/log","a"){ |f|
-          f.puts "upload #{pngpath} to Gyazo..."
-        }
+        #File.open("/tmp/log","a"){ |f|
+        #  f.puts "upload #{pngpath} to Gyazo..."
+        #}
         gyazourl = upload_gyazo(pngpath, "DESC", attr['time'])
         # res = @gyazo.upload imagefile: pngpath, created_at: attr['time']
 
@@ -534,39 +527,35 @@ def run
       end
 
       # テキストデータ
-      File.open("/tmp/error","w"){ |f|
-        f.puts attr['fullname']
-        f.puts "/usr/bin/file '#{attr['fullname']}'"
-      }
+      #File.open("/tmp/error","w"){ |f|
+      #  f.puts attr['fullname']
+      #  f.puts "/usr/bin/file '#{attr['fullname']}'"
+      #}
       begin
         s = `LANG=ja_JP.UTF-8 /usr/bin/file '#{attr['fullname']}'`.force_encoding("UTF-8")
-        File.open("/tmp/error","a"){ |f|
-          f.puts s
-        }
+        #File.open("/tmp/error","a"){ |f|
+        #  f.puts s
+        #}
         
         if `LANG=ja_JP.UTF-8 /usr/bin/file '#{attr['fullname']}'`.force_encoding("UTF-8") =~ /text/
-          File.open("/tmp/error","a"){ |f|
-            f.puts "This is a text file."
-          }
+          #File.open("/tmp/error","a"){ |f|
+          #  f.puts "This is a text file."
+          #}
           text = File.read(attr['fullname']).force_encoding("UTF-8")
           texts = text.split(/\n/)[0,10]
           if text.length > 900
             texts = text.split(/\n/)[0,2]
           end
-          File.open("/tmp/error","a"){ |f|
-            f.puts text
-          }
+          #File.open("/tmp/error","a"){ |f|
+          #  f.puts text
+          #}
           attr['text'] = texts
         end
       rescue => e
-        File.open("/tmp/error","a"){ |f|
-          f.puts e
-        }
+        #File.open("/tmp/error","a"){ |f|
+        #  f.puts e
+        #}
       end
-
-      File.open("/tmp/space","w"){ |f|
-        f.puts attr
-      }
 
       s3bucket = nil
       space_cfg = File.expand_path("~/.space")
@@ -580,21 +569,21 @@ def run
         end
       end
       if s3bucket
-        File.open("/tmp/error","a"){ |f|
-          f.puts file
-        }
+        #File.open("/tmp/error","a"){ |f|
+        #  f.puts file
+        #}
         attr['uploadurl'] = upload_s3(file,s3bucket)
       else
-        File.open("/tmp/error","a"){ |f|
-          f.puts "xxxxx #{file}"
-        }
+        #File.open("/tmp/error","a"){ |f|
+        #  f.puts "xxxxx #{file}"
+        #}
         attr['uploadurl'] = upload_googledrive(file)
       end
 
-      File.open("/tmp/error","a"){ |f|
-        f.puts "s3 upload success"
-        f.puts "file = #{attr['uploadurl']}"
-      }
+      #File.open("/tmp/error","a"){ |f|
+      #  f.puts "s3 upload success"
+      #  f.puts "file = #{attr['uploadurl']}"
+      #}
       
       attrs.push(attr)
     }
@@ -622,9 +611,9 @@ def run
         str += "\n".force_encoding("UTF-8")
       }
     rescue => e
-      File.open("/tmp/error","a"){ |f|
-        f.puts e
-      }
+      #File.open("/tmp/error","a"){ |f|
+      #  f.puts e
+      #}
     end
 
     # ゴミ箱へ
