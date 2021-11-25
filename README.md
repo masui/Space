@@ -9,19 +9,20 @@
 <h2>使い方</h2>
 
 <ul>
-  <li>Gyazoアカウントは作っておく</li>
+  <li>Gyazoアカウントを作っておく</li>
+  <ul>
+    <li>Gyazoアプリが使えるようならOK</li>
+  </ul>
   <li>Googleのアカウントも作っておく</li>
   <li>Space.app を自分のプロジェクト名に変える</li>
   <ul>
-    <li>masui-space.appという名前にすると<a href="https://scrapbox.io/masui-space/">https://scrapbox.io/masui-space/</a>が使われる
+    <li><code>masui-space.app</code>という名前にすると<a href="https://scrapbox.io/masui-space/">https://scrapbox.io/masui-space/</a>が使われる
   </ul>
   <li>アプリにファイルをDrag&amp;DropするとファイルがアップロードされてScrapboxページが作られる</li>
   <ul>
-    <li>GoogleDriveの<code>Space</code>というフォルダにファイルがアップロードされる</li>
-    <li>いろいろ最初に認証する</li>
+    <li><a href="https://drive.google.com/drive/my-drive?hl=ja">GoogleDrive</a>の<code>Space</code>というフォルダにファイルがアップロードされる</li>
+    <li>初回はいろいろ認証する</li>
   </ul>
-  <li></li>
-  <li></li>
 </ul>
 
 <h2>TODO</h2>
