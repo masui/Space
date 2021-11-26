@@ -1,7 +1,5 @@
 # brew install platypus
 
-.PHONY: space
-
 PROJECT=masui-space
 
 # ローカルなgemもアプリに含まれるように

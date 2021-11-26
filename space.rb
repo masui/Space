@@ -29,16 +29,22 @@
 #  3. $: にgemのパスを足す
 #
 
+while $:.length > 0
+  $:.shift
+end
+
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/vendor_ruby/2.6.0"
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/vendor_ruby/2.6.0/x86_64-darwin20"
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/vendor_ruby/2.6.0/universal-darwin20"
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/vendor_ruby"
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0"
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/x86_64-darwin20"
+$: << "/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/universal-darwin20"
+
+
 # アプリのディレクトリをrubyのパスに追加
 appdir = File.dirname(__FILE__)
 $: << appdir
-
-# 標準ライブラリ
-require 'net/http'
-require 'uri'
-require 'json'
-require 'socket'
-require 'find'
 
 #
 # gemのパスを全部 $: に加える
@@ -50,11 +56,13 @@ libdirs.split(/\n/).each { |dir|
   $: << dir
 }
 
-# 追加ライブラリ
-require 'json'
-require 'gyazo'
-require 'exifr/jpeg'
-require 'mime/types'
+# 標準ライブラリ
+require 'net/http'
+require 'uri'
+require 'socket'
+require 'find'
+
+require './ruby/2.6.0/gems/json-2.6.1/lib/json'
 
 #
 # ダイアログ表示 dialog("メッセージ","OK",3)
@@ -71,6 +79,12 @@ def dialog(message, button, timeout=3)
     `osascript -e 'display dialog "#{message}" buttons {"#{button}"} giving up after #{timeout}'`
   end
 end
+
+# 追加ライブラリ
+require 'json'
+require 'gyazo'
+require 'exifr/jpeg'
+require 'mime/types'
 
 # ログをセーブ
 def log(message)
